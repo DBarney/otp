@@ -57,6 +57,24 @@ transform(#'OTPTBSCertificate'{}= TBS, decode) ->
 transform(#'AttributeTypeAndValue'{type=Id,value=Value0} = ATAV, Func) ->
     {ok, Value} =
         case attribute_type(Id) of
+	    'X520countryName'when Func == decode ->
+		%% Workaround that some certificates break the ASN-1 spec
+		%% and encode countryname as utf8
+		case 'OTP-PUB-KEY':Func('OTP-X520countryname', Value0) of
+		    {ok, {utf8String, Utf8Value}} ->
+			{ok, unicode:characters_to_list(Utf8Value)};
+		    {ok, {printableString, ASCCI}} ->
+			{ok, ASCCI}
+		end;
+        'EmailAddress' when Func == decode ->
+        %% Workaround that some certificates break the ASN-1 spec
+        %% and encode emailAddress as utf8
+        case 'OTP-PUB-KEY':Func('OTP-EmailAddress', Value0) of
+            {ok, {utf8String, Utf8Value}} ->
+            {ok, unicode:characters_to_list(Utf8Value)};
+            {ok, {ia5String, ASCCI}} ->
+            {ok, ASCCI}
+        end;
             Type when is_atom(Type) -> 'OTP-PUB-KEY':Func(Type, Value0);
             _UnknownType            -> {ok, Value0}
         end,
