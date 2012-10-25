@@ -211,8 +211,14 @@ id-emailAddress          AttributeType ::= { pkcs-9 1 }
 EmailAddress ::=         IA5String (SIZE (1..ub-emailaddress-length))
 
 -- Legacy attributes
+ -- The decoding and mapping between ID and Type is done in the code
+ -- in module publickey_cert_records via the function attribute_type
+ -- To be more forgiving and compatible with other SSL implementations
+ -- regarding how to handle and sometimes accept incorrect certificates
+ -- we define and use the type below instead of EmailAddress
 
--- naming data types --
+OTP-EmailAddress ::= CHOICE {
+   ia5String     IA5String   (SIZE (1..ub-emailaddress-length)),
 
 Name ::= CHOICE { -- only one possibility for now --
       rdnSequence  RDNSequence }
