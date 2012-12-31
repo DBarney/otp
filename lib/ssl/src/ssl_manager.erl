@@ -145,7 +145,7 @@ new_session_id(Port) ->
     call({new_session_id, Port}).
 
 clean_cert_db(Ref, File) ->
-    erlang:send_after(?CLEAN_CERT_DB, self(), {clean_cert_db, Ref, File}).
+    erlang:send_after(?CLEAN_CERT_DB, get(ssl_manager), {clean_cert_db, Ref, File}).
 
 %%--------------------------------------------------------------------
 -spec register_session(inet:port_number(), #session{}) -> ok.
@@ -322,21 +322,14 @@ handle_info(clear_pem_cache, #state{certificate_db = [_,_,PemChace]} = State) ->
 
 handle_info({clean_cert_db, Ref, File},
 	    #state{certificate_db = [CertDb,RefDb, PemCache]} = State) ->
-    case ssl_certificate_db:ref_count(Ref, RefDb, 0) of
-	0 ->
-	    MD5 = crypto:md5(File),
-	    case ssl_certificate_db:lookup_cached_pem(PemCache, MD5) of
-		[{Content, Ref}] ->
-		    ssl_certificate_db:insert(MD5, Content, PemCache);
-		undefined ->
-		    ok
-	    end,
-	    ssl_certificate_db:remove(Ref, RefDb),
-	    ssl_certificate_db:remove_trusted_certs(Ref, CertDb);
-	_ ->
-	    ok
-    end,
-    {noreply, State};
+	case ssl_certificate_db:lookup(Ref, RefDb) of
+		undefined -> %% Alredy cleaned
+			ok;
+		_ ->
+			ok,
+			clean_cert_db(Ref, CertDb, RefDb, PemCache, File)
+	end,
+	{noreply, State};
 
 handle_info({'EXIT', _, _}, State) ->
     %% Session validator died!! Do we need to take any action?
@@ -466,3 +459,20 @@ new_id(Port, Tries, Cache, CacheCb) ->
 	_ ->
 	    new_id(Port, Tries - 1, Cache, CacheCb)
     end.
+
+
+clean_cert_db(Ref, CertDb, RefDb, PemCache, File) ->
+	case ssl_certificate_db:ref_count(Ref, RefDb, 0) of
+	   0 ->
+	       MD5 = crypto:md5(File),
+	       case ssl_certificate_db:lookup_cached_pem(PemCache, MD5) of
+	           [{Content, Ref}] ->
+	               ssl_certificate_db:insert(MD5, Content, PemCache);
+	           _ ->
+	               ok
+	       end,
+	       ssl_certificate_db:remove(Ref, RefDb),
+	       ssl_certificate_db:remove_trusted_certs(Ref, CertDb);
+	   _ ->
+	       ok
+	end.
