@@ -143,7 +143,7 @@ new_session_id(Port) ->
     call({new_session_id, Port}).
 
 clean_cert_db(Ref, File) ->
-    erlang:send_after(?CLEAN_CERT_DB, self(), {clean_cert_db, Ref, File}).
+    erlang:send_after(?CLEAN_CERT_DB, get(ssl_manager), {clean_cert_db, Ref, File}).
 
 %%--------------------------------------------------------------------
 -spec register_session(inet:port_number(), #session{}) -> ok.
@@ -320,13 +320,13 @@ handle_info(clear_pem_cache, #state{certificate_db = [_,_,PemChace]} = State) ->
 
 handle_info({clean_cert_db, Ref, File},
 	    #state{certificate_db = [CertDb,RefDb, PemCache]} = State) ->
-    case ssl_certificate_db:ref_count(Ref, RefDb, 0) of
+    case catch ssl_certificate_db:ref_count(Ref, RefDb, 0) of
 	0 ->
 	    MD5 = crypto:md5(File),
 	    case ssl_certificate_db:lookup_cached_pem(PemCache, MD5) of
 		[{Content, Ref}] ->
 		    ssl_certificate_db:insert(MD5, Content, PemCache);
-		undefined ->
+		_ ->
 		    ok
 	    end,
 	    ssl_certificate_db:remove(Ref, RefDb),
